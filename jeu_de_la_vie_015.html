@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Agar.io Clone</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #F0F0F0;
+        }
+        canvas {
+            display: block;
+        }
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #333;
+            font-family: Arial;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+
+// Ajuster la taille du canvas
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Configuration
+const config = {
+    maxZoom: 4,
+    minZoom: 1,
+    zoomSpeed: 0.05,
+    foodCount: 500,
+    activationRadiusMultiplier: 1.5, // Le rayon d'activation sera 1.5 fois la taille du joueur
+    deactivationRadiusMultiplier: 3  // Le rayon de désactivation sera 3 fois la taille du joueur
+};
+
+let isZoomed = false;
+
+// Camera
+const camera = {
+    x: 0,
+    y: 0,
+    scale: 1,
+    targetScale: 1
+};
+
+// Ajouter la classe Food
+class Food {
+    constructor() {
+        this.respawn();
+        this.radius = 4;
+        this.color = this.getRandomColor();
+    }
+
+    respawn() {
+        // Position aléatoire dans le monde
+        this.x = Math.random() * (canvas.width * 4) - canvas.width * 2;
+        this.y = Math.random() * (canvas.height * 4) - canvas.height * 2;
+    }
+
+    getRandomColor() {
+        const colors = [
+            '#f44336', '#e91e63', '#9c27b0', '#673ab7',
+            '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4',
+            '#009688', '#4caf50', '#8bc34a', '#cddc39',
+            '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    draw() {
+        const screenX = (this.x - player.x) * camera.scale + canvas.width / 2;
+        const screenY = (this.y - player.y) * camera.scale + canvas.height / 2;
+
+        // Ne dessiner que si la nourriture est visible à l'écran
+        if (screenX > -50 && screenX < canvas.width + 50 &&
+            screenY > -50 && screenY < canvas.height + 50) {
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, this.radius * camera.scale, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+        }
+    }
+}
+
+// Initialiser la nourriture
+const foods = Array.from({ length: config.foodCount }, () => new Food());
+
+// Joueur
+class Player {
+    constructor() {
+        this.x = 0;
+        this.y = 0;
+        this.baseRadius = 20; // Taille de départ
+        this.radius = this.baseRadius;
+        this.speed = 0.8;       // Vitesse de base réduite
+        this.maxSpeed = 2;      // Vitesse maximale
+        this.acceleration = 0.1; // Accélération plus douce
+        this.velocityX = 0;     // Vélocité pour un mouvement plus fluide
+        this.velocityY = 0;
+        this.score = 0;
+    }
+
+    checkFoodCollision() {
+        foods.forEach(food => {
+            const dx = this.x - food.x;
+            const dy = this.y - food.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < this.radius) {
+                food.respawn();
+                this.score += 10;
+                this.radius += 0.5;
+                scoreElement.textContent = `Score: ${this.score}`;
+            }
+        });
+    }
+
+    update(mouseX, mouseY) {
+        // Calculer la position cible
+        const targetX = (mouseX - canvas.width / 2) / camera.scale + this.x;
+        const targetY = (mouseY - canvas.height / 2) / camera.scale + this.y;
+
+        // Calculer la direction et la distance
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0) {
+            // Normaliser la direction
+            const dirX = dx / distance;
+            const dirY = dy / distance;
+
+            // Calculer la vitesse désirée basée sur la distance
+            const speedFactor = Math.min(distance / 100, 1); // Distance maximale d'influence
+            const targetSpeed = this.speed + (this.maxSpeed - this.speed) * speedFactor;
+
+            // Appliquer une accélération progressive
+            this.velocityX += (dirX * targetSpeed - this.velocityX) * this.acceleration;
+            this.velocityY += (dirY * targetSpeed - this.velocityY) * this.acceleration;
+        } else {
+            // Décélération quand proche de la cible
+            this.velocityX *= 0.95;
+            this.velocityY *= 0.95;
+        }
+
+        // Appliquer la vélocité
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+
+        // Vérifier les collisions avec la nourriture
+        this.checkFoodCollision();
+    }
+
+    draw() {
+        const screenX = canvas.width / 2;
+        const screenY = canvas.height / 2;
+
+        // Dessiner le corps
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.radius * camera.scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff4444';
+        ctx.fill();
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Ajouter un effet de brillance
+        ctx.beginPath();
+        ctx.arc(
+            screenX - this.radius * 0.3 * camera.scale,
+            screenY - this.radius * 0.3 * camera.scale,
+            this.radius * 0.2 * camera.scale,
+            0,
+            Math.PI * 2
+        );
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fill();
+    }
+}
+
+// Initialisation
+const player = new Player();
+let mouseX = 0;
+let mouseY = 0;
+
+// Nouvelle fonction de détection avec rayons dynamiques
+function checkZoomTrigger(mouseX, mouseY) {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const dx = mouseX - centerX;
+    const dy = mouseY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculer les rayons en fonction de la taille du joueur
+    const activationRadius = player.radius * config.activationRadiusMultiplier;
+    const deactivationRadius = player.radius * config.deactivationRadiusMultiplier;
+
+    if (!isZoomed && distance <= activationRadius) {
+        // Activation du zoom
+        isZoomed = true;
+        camera.targetScale = config.maxZoom;
+    } 
+    else if (isZoomed && distance > deactivationRadius) {
+        // Désactivation du zoom
+        isZoomed = false;
+        camera.targetScale = config.minZoom;
+    }
+}
+
+// Event listeners
+canvas.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    checkZoomTrigger(mouseX, mouseY);
+});
+
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+// Boucle de jeu
+function gameLoop() {
+    // Mise à jour du zoom avec une transition plus rapide
+    camera.scale += (camera.targetScale - camera.scale) * config.zoomSpeed;
+
+    // Mise à jour du joueur
+    player.update(mouseX, mouseY);
+
+    // Effacement du canvas
+    ctx.fillStyle = '#F0F0F0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Dessin de la nourriture
+    foods.forEach(food => food.draw());
+
+    // Dessin du joueur
+    player.draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
